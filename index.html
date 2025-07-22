@@ -1,91 +1,493 @@
-const SPREADSHEET_ID = "1BgblyT5GHjmXmVDby9RfnNahLZdLQXO6TsFHj1IueMQ";
-const SHEET_NAME = "나 한준희요";
-const GEMINI_API_KEY = "AIzaSyDiaMQy1afOZKwCtuSSkxPqfRf_RnGEF64"; // 실제 API 키로 대체 필요
+<!DOCTYPE html>
+<html lang="ko">
 
-function doGet() {
-  return HtmlService.createTemplateFromFile('index')
-    .evaluate()
-    .setTitle('여행 계획 추천기');
-}
-
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename)
-    .getContent();
-}
-
-/**
- * 사용자 입력 데이터를 받아 Gemini API로 여행 계획을 생성하고 Google Sheet에 저장합니다.
- * @param {Object} formData - 사용자 입력 데이터 (여행 목적지, 인원, 기간 등)
- * @returns {Object} - 생성된 여행 계획 또는 에러 메시지
- */
-function generateTravelPlan(formData) {
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-  if (!sheet) {
-    return {
-      success: false,
-      message: "시트 이름을 찾을 수 없습니다: " + SHEET_NAME
-    };
-  }
-
-  try {
-    const {
-      destination,
-      adults,
-      children,
-      duration,
-      travelStyle,
-      budget
-    } = formData;
-
-    // Gemini API 호출을 위한 프롬프트 구성
-    const prompt = `
-      "${destination}"(으)로 ${adults}명 성인, ${children}명 아이가 ${duration}일 동안 ${travelStyle} 컨셉으로 여행을 가려고 합니다.
-      예산은 ${budget}입니다. 이 조건에 맞춰 상세한 여행 계획을 추천해 주세요.
-      계획은 여행의 전체적인 콘셉트, 일자별 상세 일정(방문 장소, 활동, 예상 시간), 추천 맛집, 이동 수단, 숙소 제안 등
-      구체적이고 실용적인 내용으로 구성해 주세요. 답변은 가독성이 좋게 마크다운 형식으로 작성해 주세요.
-    `;
-
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-    const options = {
-      method: "post",
-      contentType: "application/json",
-      payload: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }]
-      })
-    };
-
-    const response = UrlFetchApp.fetch(geminiUrl, options);
-    const data = JSON.parse(response.getContentText());
-
-    let generatedPlan = "여행 계획을 생성하는 데 실패했습니다. 다시 시도해 주세요.";
-    if (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
-      generatedPlan = data.candidates[0].content.parts[0].text;
-    } else {
-      console.error("Gemini API 응답 형식 오류:", data);
-      return {
-        success: false,
-        message: "Gemini API 응답을 처리할 수 없습니다."
-      };
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>나만의 여행 계획 추천</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    /* CSS 코드 시작 */
+    :root {
+      --primary-blue: #3498db;
+      --light-blue: #87ceeb;
+      --dark-blue: #2c3e50;
+      --accent-color: #f1c40f;
+      --background-light: #ecf0f1;
+      --text-dark: #333;
+      --text-light: #fff;
+      --card-background: #ffffff;
+      --border-radius: 10px;
+      --box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      --transition-speed: 0.3s;
     }
 
-    // Google Sheet에 데이터 저장
-    const timestamp = new Date();
-    sheet.appendRow([timestamp, destination, adults, children, budget, travelStyle, duration, generatedPlan]);
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      line-height: 1.6;
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(to right, var(--light-blue), var(--primary-blue));
+      color: var(--text-dark);
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
 
-    return {
-      success: true,
-      plan: generatedPlan
-    };
+    .container {
+      background-color: var(--card-background);
+      border-radius: var(--border-radius);
+      box-shadow: var(--box-shadow);
+      padding: 30px;
+      max-width: 800px;
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 20px;
+      margin-bottom: 20px;
+    }
 
-  } catch (e) {
-    console.error("여행 계획 생성 중 오류 발생: ", e.toString());
-    return {
-      success: false,
-      message: "여행 계획 생성 중 오류가 발생했습니다: " + e.message
-    };
-  }
-}
+    h1 {
+      text-align: center;
+      color: var(--primary-blue);
+      margin-bottom: 30px;
+      font-weight: 700;
+      font-size: 2em;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--dark-blue);
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: calc(100% - 20px);
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: var(--border-radius);
+      font-size: 1em;
+      box-sizing: border-box;
+      transition: border-color var(--transition-speed);
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus {
+      border-color: var(--primary-blue);
+      outline: none;
+    }
+
+    .radio-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+
+    .radio-group label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      padding: 10px 15px;
+      background-color: var(--background-light);
+      border-radius: var(--border-radius);
+      transition: background-color var(--transition-speed), transform var(--transition-speed);
+    }
+
+    .radio-group label:hover {
+      background-color: #e0e6e9;
+      transform: translateY(-2px);
+    }
+
+    .radio-group input[type="radio"] {
+      margin-right: 8px;
+      accent-color: var(--primary-blue);
+    }
+
+    .budget-input-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    button {
+      background-color: var(--primary-blue);
+      color: var(--text-light);
+      padding: 15px 25px;
+      border: none;
+      border-radius: var(--border-radius);
+      font-size: 1.1em;
+      cursor: pointer;
+      width: 100%;
+      box-sizing: border-box;
+      transition: background-color var(--transition-speed), transform var(--transition-speed);
+      margin-top: 20px;
+      font-weight: 600;
+    }
+
+    button:hover {
+      background-color: var(--dark-blue);
+      transform: translateY(-2px);
+    }
+
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+
+    #loadingIndicator {
+      text-align: center;
+      margin-top: 20px;
+      color: var(--dark-blue);
+      font-size: 1.1em;
+      font-weight: 600;
+      display: none;
+    }
+
+    .spinner {
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-left-color: var(--primary-blue);
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 10px;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    #travelPlanOutput {
+      margin-top: 30px;
+      padding: 20px;
+      background-color: var(--background-light);
+      border-radius: var(--border-radius);
+      border: 1px dashed #ccc;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 150px;
+      max-height: 600px;
+      overflow-y: auto;
+      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
+      font-size: 0.95em;
+      line-height: 1.8;
+      color: var(--dark-blue);
+    }
+
+    /* Markdown Basic Styling for Output */
+    #travelPlanOutput h2,
+    #travelPlanOutput h3,
+    #travelPlanOutput h4 {
+      color: var(--primary-blue);
+      margin-top: 20px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--light-blue);
+      padding-bottom: 5px;
+    }
+
+    #travelPlanOutput strong {
+      color: var(--dark-blue);
+    }
+
+    #travelPlanOutput ul {
+      list-style-type: disc;
+      padding-left: 20px;
+    }
+
+    #travelPlanOutput ol {
+      list-style-type: decimal;
+      padding-left: 20px;
+    }
+
+    #travelPlanOutput li {
+      margin-bottom: 5px;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      body {
+        padding: 10px;
+      }
+
+      .container {
+        padding: 20px;
+      }
+
+      h1 {
+        font-size: 1.8em;
+      }
+
+      .radio-group {
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .radio-group label {
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      button {
+        padding: 12px 20px;
+        font-size: 1em;
+      }
+    }
+    /* CSS 코드 끝 */
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>나만의 여행 계획 추천기 🌍</h1>
+
+    <div class="form-group">
+      <label for="destination">여행할 나라/지역/도시를 입력하세요.</label>
+      <input type="text" id="destination" placeholder="예: 프랑스 파리" required>
+    </div>
+
+    <div class="form-group">
+      <label>성인 인원수:</label>
+      <input type="number" id="adults" min="1" value="1" required>
+    </div>
+
+    <div class="form-group">
+      <label>아이 인원수:</label>
+      <input type="number" id="children" min="0" value="0" required>
+    </div>
+
+    <div class="form-group">
+      <label for="duration">여행할 기간을 입력하세요 (단위: 일)</label>
+      <input type="number" id="duration" min="1" value="3" required>
+    </div>
+
+    <div class="form-group">
+      <label>여행 스타일을 선택하세요.</label>
+      <div class="radio-group">
+        <label><input type="radio" name="travelStyle" value="관광" checked> 관광</label>
+        <label><input type="radio" name="travelStyle" value="휴양"> 휴양</label>
+        <label><input type="radio" name="travelStyle" value="커플여행"> 커플여행</label>
+        <label><input type="radio" name="travelStyle" value="가족여행"> 가족여행</label>
+        <label><input type="radio" name="travelStyle" value="나홀로여행"> 나홀로여행</label>
+        <label><input type="radio" name="travelStyle" value="친구와여행"> 친구와여행</label>
+        <label><input type="radio" name="travelStyle" value="기타"> 기타</label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>예산을 선택하거나 직접 입력하세요.</label>
+      <div class="radio-group">
+        <label><input type="radio" name="budgetOption" value="100만원" checked> 100만원</label>
+        <label><input type="radio" name="budgetOption" value="200만원"> 200만원</label>
+        <label><input type="radio" name="budgetOption" value="300만원"> 300만원</label>
+        <label><input type="radio" name="budgetOption" value="직접 입력" id="directBudgetRadio"> 직접 입력</label>
+      </div>
+      <div id="directBudgetInputWrapper" class="budget-input-wrapper" style="display: none;">
+        <input type="text" id="directBudget" placeholder="구체적인 예산 입력 (예: 500만원)">
+      </div>
+    </div>
+
+    <button id="recommendButton">여행 계획 추천</button>
+
+    <div id="loadingIndicator">
+      <span class="spinner"></span> 여행 계획을 생성 중입니다... 잠시만 기다려 주세요!
+    </div>
+
+    <div id="travelPlanOutput">
+      여기에 추천된 여행 계획이 표시됩니다.
+    </div>
+  </div>
+
+  <script>
+    /* JavaScript 코드 시작 */
+    const directBudgetRadio = document.getElementById('directBudgetRadio');
+    const directBudgetInputWrapper = document.getElementById('directBudgetInputWrapper');
+    const recommendButton = document.getElementById('recommendButton');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const travelPlanOutput = document.getElementById('travelPlanOutput');
+
+    // '직접 입력' 라디오 버튼 클릭 시 텍스트 입력 상자 토글
+    document.querySelectorAll('input[name="budgetOption"]').forEach(radio => {
+      radio.addEventListener('change', function() {
+        if (this.value === '직접 입력') {
+          directBudgetInputWrapper.style.display = 'flex';
+        } else {
+          directBudgetInputWrapper.style.display = 'none';
+        }
+      });
+    });
+
+    // '여행 계획 추천' 버튼 클릭 이벤트 핸들러
+    recommendButton.addEventListener('click', async function() {
+      // 입력 값 수집
+      const destination = document.getElementById('destination').value;
+      const adults = parseInt(document.getElementById('adults').value);
+      const children = parseInt(document.getElementById('children').value);
+      const duration = parseInt(document.getElementById('duration').value);
+      const travelStyle = document.querySelector('input[name="travelStyle"]:checked').value;
+
+      let budget = document.querySelector('input[name="budgetOption"]:checked').value;
+      if (budget === '직접 입력') {
+        budget = document.getElementById('directBudget').value;
+      }
+
+      // 필수 입력 값 유효성 검사
+      if (!destination || !adults || !duration || !budget) {
+        alert('모든 필수 입력 필드를 채워주세요.');
+        return;
+      }
+      if (adults < 1) {
+        alert('성인 인원수는 최소 1명 이상이어야 합니다.');
+        return;
+      }
+      if (children < 0) {
+        alert('아이 인원수는 0명 이상이어야 합니다.');
+        return;
+      }
+      if (duration < 1) {
+        alert('여행 기간은 최소 1일 이상이어야 합니다.');
+        return;
+      }
+      if (budget === '직접 입력' && !document.getElementById('directBudget').value) {
+        alert('직접 입력 예산을 입력해주세요.');
+        return;
+      }
+
+      // 로딩 인디케이터 표시 및 버튼 비활성화
+      loadingIndicator.style.display = 'block';
+      recommendButton.disabled = true;
+      travelPlanOutput.textContent = ''; // 이전 결과 초기화
+
+      const formData = {
+        destination,
+        adults,
+        children,
+        duration,
+        travelStyle,
+        budget
+      };
+
+      // --- 백엔드 (Gemini API 호출 및 Google Sheet 저장) 로직은 여기서 처리해야 합니다 ---
+      // 일반 웹 환경에서는 클라이언트 측에서 직접 Gemini API 키를 노출하거나
+      // Google Sheet에 직접 접근하는 것은 보안상 권장되지 않습니다.
+      // 따라서, 이 부분은 서버리스 함수(예: Google Cloud Functions, AWS Lambda)를
+      // 사용하여 백엔드 API를 구축하고, 클라이언트는 해당 백엔드 API를 호출하도록 해야 합니다.
+      // 아래 코드는 예시 더미 데이터 또는 실제 API 호출을 위한 플레이스홀더입니다.
+
+      try {
+        // 실제 Gemini API 호출 예시 (보안상 직접 클라이언트에서 호출 비권장)
+        // const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"; // 여기에 실제 Gemini API 키를 넣으세요!
+        // const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+        //
+        // const response = await fetch(geminiUrl, {
+        //   method: 'POST',
+        //   headers: {
+        //     'Content-Type': 'application/json'
+        //   },
+        //   body: JSON.stringify({
+        //     contents: [{
+        //       parts: [{
+        //         text: `"${destination}"(으)로 ${adults}명 성인, ${children}명 아이가 ${duration}일 동안 ${travelStyle} 컨셉으로 여행을 가려고 합니다. 예산은 ${budget}입니다. 이 조건에 맞춰 상세한 여행 계획을 추천해 주세요. 답변은 가독성이 좋게 마크다운 형식으로 작성해 주세요.`
+        //       }]
+        //     }]
+        //   })
+        // });
+        // const data = await response.json();
+        //
+        // let generatedPlan = "여행 계획을 생성하는 데 실패했습니다. 다시 시도해 주세요.";
+        // if (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
+        //   generatedPlan = data.candidates[0].content.parts[0].text;
+        // } else {
+        //   console.error("Gemini API 응답 형식 오류:", data);
+        //   generatedPlan = "Gemini API 응답을 처리할 수 없습니다.";
+        // }
+
+        // --- 더미 데이터로 대체 ---
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기 시뮬레이션
+        const generatedPlan = `
+          ## 🌟 ${formData.destination} ${formData.travelStyle} ${formData.duration}일 여행 계획 🌟
+
+          **개요:** ${formData.destination}으로 떠나는 ${formData.travelStyle} 테마의 ${formData.duration}일 여행입니다. ${formData.adults}명의 성인과 ${formData.children}명의 아이를 위한 맞춤형 일정으로, 예산은 ${formData.budget}에 맞춰 최대한 즐겁고 효율적인 경험을 제공합니다.
+
+          ---
+
+          ### 🗓️ 1일차: ${formData.destination} 도착 및 주요 명소 탐방
+          * **오전:** ${formData.destination} 공항 도착 후 시내로 이동 및 호텔 체크인. (추천 호텔: [도시 중심가에 위치한 가족/커플 친화적 호텔])
+          * **점심:** 현지 맛집에서 ${formData.destination} 전통 요리 즐기기. (예: [추천 레스토랑 이름])
+          * **오후:** 랜드마크 방문. (예: 에펠탑, 콜로세움, 만리장성 등) 아이들을 위한 포토 스팟 및 간단한 액티비티 고려.
+          * **저녁:** ${formData.destination} 야경이 보이는 레스토랑에서 근사한 저녁 식사.
+          * **숙소:** [선택한 호텔]
+
+          ### 🗓️ 2일차: 문화/체험 및 휴식
+          * **오전:** 박물관 또는 미술관 방문 (예: 루브르 박물관, 대영 박물관). 아이들을 위한 오디오 가이드나 체험 프로그램 활용.
+          * **점심:** 캐주얼한 현지 카페에서 가볍게 식사.
+          * **오후:** 공원 또는 유원지에서 자유시간 및 휴식. (예: 센강 유람선, 디즈니랜드, 도쿄 타워 등). 가족 여행이라면 놀이공원, 커플 여행이라면 로맨틱한 산책 추천.
+          * **저녁:** 길거리 음식 탐방 또는 간단한 현지 식당 방문.
+          * **숙소:** [선택한 호텔]
+
+          ### 🗓️ 3일차: 쇼핑 및 출국
+          * **오전:** 현지 시장 또는 유명 쇼핑가에서 기념품 구매 및 쇼핑.
+          * **점심:** 공항으로 이동 전 마지막 현지 식사.
+          * **오후:** ${formData.destination} 공항으로 이동 및 출국 수속. 아쉬운 마음을 뒤로하고 다음 여행을 기약합니다.
+
+          ---
+
+          ### 💡 추가 팁:
+          * **교통:** ${formData.destination} 내에서는 대중교통(지하철, 버스) 이용이 편리하며, 필요시 택시나 공유 서비스를 이용하세요.
+          * **숙소:** ${formData.travelStyle}에 맞는 숙소(부티크 호텔, 아파트먼트, 리조트 등)를 미리 예약하는 것을 추천합니다.
+          * **예산 관리:** ${formData.budget} 내에서 효율적으로 지출 계획을 세우고, 환전 및 결제 수단을 미리 준비하세요.
+          * **안전:** 소지품 관리에 유의하고, 여행자 보험에 가입하는 것을 권장합니다.
+          * **현지 앱:** ${formData.destination}의 대중교통, 맛집, 지도 앱 등을 미리 다운로드해두면 편리합니다.
+
+          즐거운 ${formData.destination} 여행 되세요! 😊
+        `;
+        // --- 더미 데이터 끝 ---
+
+        // 마크다운 텍스트를 HTML로 변환 (간단한 처리)
+        let formattedPlan = generatedPlan
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // 볼드체
+          .replace(/##\s(.*?)\n/g, '<h2>$1</h2>') // H2
+          .replace(/###\s(.*?)\n/g, '<h3>$1</h3>') // H3
+          .replace(/####\s(.*?)\n/g, '<h4>$1</h4>') // H4
+          .replace(/\n\n/g, '<p>') // 단락
+          .replace(/\n\*\s/g, '<li>') // 리스트 아이템
+          .replace(/\n\d\.\s/g, '<li>'); // 숫자 리스트 아이템 (간단)
+
+        // 리스트 태그 닫기 (매우 간단한 처리, 완벽하지 않음)
+        formattedPlan = formattedPlan.replace(/<li>(.*?)(<br>|$)/g, '<li>$1</li>');
+        // 마지막 줄바꿈 제거 후 <p> 닫기
+        formattedPlan = formattedPlan.replace(/<p>$/, '');
+
+        travelPlanOutput.innerHTML = formattedPlan;
+
+      } catch (error) {
+        console.error('여행 계획 생성 중 오류 발생:', error);
+        travelPlanOutput.textContent = '오류: 여행 계획 생성 중 문제가 발생했습니다. 다시 시도해주세요.';
+        alert('여행 계획 생성 중 오류가 발생했습니다: ' + error.message);
+      } finally {
+        loadingIndicator.style.display = 'none';
+        recommendButton.disabled = false;
+      }
+    });
+    /* JavaScript 코드 끝 */
+  </script>
+</body>
+
+</html>
