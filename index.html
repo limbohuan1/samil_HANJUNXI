@@ -334,10 +334,56 @@
       });
     });
 
+    /**
+     * 간단한 마크다운을 HTML로 변환하는 함수.
+     * 복잡한 마크다운을 지원하려면 별도의 라이브러리(marked.js 등) 사용을 권장합니다.
+     * @param {string} markdownText - 마크다운 형식의 텍스트
+     * @returns {string} - HTML 형식으로 변환된 텍스트
+     */
+    function convertMarkdownToHtml(markdownText) {
+      let html = markdownText;
+
+      // H2, H3, H4 헤딩
+      html = html.replace(/^####\s(.*?)$/gm, '<h4>$1</h4>');
+      html = html.replace(/^###\s(.*?)$/gm, '<h3>$1</h3>');
+      html = html.replace(/^##\s(.*?)$/gm, '<h2>$1</h2>');
+
+      // 볼드체 **text**
+      html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      // 기울임체 *text* (선택 사항)
+      html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+      // 순서 없는 리스트 (-)
+      html = html.replace(/^- (.*)$/gm, '<li>$1</li>');
+      html = html.replace(/(<li>.*<\/li>)/gms, '<ul>$1</ul>');
+
+      // 순서 있는 리스트 (1., 2.)
+      html = html.replace(/^\d+\.\s(.*?)$/gm, '<li>$1</li>');
+      html = html.replace(/(<li>.*<\/li>)/gms, '<ol>$1</ol>');
+
+
+      // 줄바꿈을 <br> 태그로 변환 (두 번 이상 연속되는 줄바꿈은 단락으로 처리)
+      html = html.replace(/\n\s*\n/g, '</p><p>'); // 빈 줄은 새 단락으로
+      html = html.replace(/\n/g, '<br>'); // 그 외 줄바꿈은 <br>
+      html = `<p>${html}</p>`; // 전체를 단락으로 감싸기
+
+      // 특정 HTML 태그 내의 불필요한 <p> 제거 (예: <li> 안에 <p>가 생기는 경우)
+      html = html.replace(/<p><li>/g, '<li>');
+      html = html.replace(/<\/li><\/p>/g, '</li>');
+      html = html.replace(/<p><ul>/g, '<ul>');
+      html = html.replace(/<\/ul><\/p>/g, '</ul>');
+      html = html.replace(/<p><ol>/g, '<ol>');
+      html = html.replace(/<\/ol><\/p>/g, '</ol>');
+
+
+      return html;
+    }
+
+
     // '여행 계획 추천' 버튼 클릭 이벤트 핸들러
     recommendButton.addEventListener('click', async function() {
       // 입력 값 수집
-      const destination = document.getElementById('destination').value;
+      const destination = document.getElementById('destination').value.trim();
       const adults = parseInt(document.getElementById('adults').value);
       const children = parseInt(document.getElementById('children').value);
       const duration = parseInt(document.getElementById('duration').value);
@@ -345,35 +391,40 @@
 
       let budget = document.querySelector('input[name="budgetOption"]:checked').value;
       if (budget === '직접 입력') {
-        budget = document.getElementById('directBudget').value;
+        budget = document.getElementById('directBudget').value.trim();
       }
 
       // 필수 입력 값 유효성 검사
-      if (!destination || !adults || !duration || !budget) {
-        alert('모든 필수 입력 필드를 채워주세요.');
+      if (!destination) {
+        alert('여행할 나라/지역/도시를 입력하세요.');
+        document.getElementById('destination').focus();
         return;
       }
-      if (adults < 1) {
+      if (isNaN(adults) || adults < 1) {
         alert('성인 인원수는 최소 1명 이상이어야 합니다.');
+        document.getElementById('adults').focus();
         return;
       }
-      if (children < 0) {
+      if (isNaN(children) || children < 0) {
         alert('아이 인원수는 0명 이상이어야 합니다.');
+        document.getElementById('children').focus();
         return;
       }
-      if (duration < 1) {
+      if (isNaN(duration) || duration < 1) {
         alert('여행 기간은 최소 1일 이상이어야 합니다.');
+        document.getElementById('duration').focus();
         return;
       }
-      if (budget === '직접 입력' && !document.getElementById('directBudget').value) {
+      if (budget === '직접 입력' && !document.getElementById('directBudget').value.trim()) {
         alert('직접 입력 예산을 입력해주세요.');
+        document.getElementById('directBudget').focus();
         return;
       }
 
       // 로딩 인디케이터 표시 및 버튼 비활성화
       loadingIndicator.style.display = 'block';
       recommendButton.disabled = true;
-      travelPlanOutput.textContent = ''; // 이전 결과 초기화
+      travelPlanOutput.innerHTML = ''; // 이전 결과 초기화
 
       const formData = {
         destination,
@@ -384,44 +435,20 @@
         budget
       };
 
-      // --- 백엔드 (Gemini API 호출 및 Google Sheet 저장) 로직은 여기서 처리해야 합니다 ---
-      // 일반 웹 환경에서는 클라이언트 측에서 직접 Gemini API 키를 노출하거나
-      // Google Sheet에 직접 접근하는 것은 보안상 권장되지 않습니다.
-      // 따라서, 이 부분은 서버리스 함수(예: Google Cloud Functions, AWS Lambda)를
-      // 사용하여 백엔드 API를 구축하고, 클라이언트는 해당 백엔드 API를 호출하도록 해야 합니다.
-      // 아래 코드는 예시 더미 데이터 또는 실제 API 호출을 위한 플레이스홀더입니다.
+      // --- 중요: 백엔드 (Gemini API 호출 및 Google Sheet 저장) 로직은 여기서 처리해야 합니다 ---
+      // 일반 웹 환경(GitHub Pages 등)에서는 클라이언트 측에서 직접 Gemini API 키를 노출하거나
+      // Google Sheet에 직접 접근하는 것은 보안상, 기술상 권장되지 않으며 불가능합니다.
+      // 따라서, 이 부분은 **Node.js, Python 등의 서버 또는 Google Cloud Functions, AWS Lambda 같은
+      // 서버리스 함수**를 사용하여 백엔드 API를 구축하고, 클라이언트는 해당 백엔드 API를
+      // `fetch()` 등으로 호출하도록 해야 합니다.
+      // 아래 코드는 백엔드 없이 프런트엔드만으로 동작하는 예시를 위해 **더미 데이터**를 사용합니다.
 
       try {
-        // 실제 Gemini API 호출 예시 (보안상 직접 클라이언트에서 호출 비권장)
-        // const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"; // 여기에 실제 Gemini API 키를 넣으세요!
-        // const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-        //
-        // const response = await fetch(geminiUrl, {
-        //   method: 'POST',
-        //   headers: {
-        //     'Content-Type': 'application/json'
-        //   },
-        //   body: JSON.stringify({
-        //     contents: [{
-        //       parts: [{
-        //         text: `"${destination}"(으)로 ${adults}명 성인, ${children}명 아이가 ${duration}일 동안 ${travelStyle} 컨셉으로 여행을 가려고 합니다. 예산은 ${budget}입니다. 이 조건에 맞춰 상세한 여행 계획을 추천해 주세요. 답변은 가독성이 좋게 마크다운 형식으로 작성해 주세요.`
-        //       }]
-        //     }]
-        //   })
-        // });
-        // const data = await response.json();
-        //
-        // let generatedPlan = "여행 계획을 생성하는 데 실패했습니다. 다시 시도해 주세요.";
-        // if (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
-        //   generatedPlan = data.candidates[0].content.parts[0].text;
-        // } else {
-        //   console.error("Gemini API 응답 형식 오류:", data);
-        //   generatedPlan = "Gemini API 응답을 처리할 수 없습니다.";
-        // }
+        // 실제 API 호출을 시뮬레이션하기 위한 지연 시간
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기
 
         // --- 더미 데이터로 대체 ---
-        await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기 시뮬레이션
-        const generatedPlan = `
+        const dummyPlan = `
           ## 🌟 ${formData.destination} ${formData.travelStyle} ${formData.duration}일 여행 계획 🌟
 
           **개요:** ${formData.destination}으로 떠나는 ${formData.travelStyle} 테마의 ${formData.duration}일 여행입니다. ${formData.adults}명의 성인과 ${formData.children}명의 아이를 위한 맞춤형 일정으로, 예산은 ${formData.budget}에 맞춰 최대한 즐겁고 효율적인 경험을 제공합니다.
@@ -429,57 +456,43 @@
           ---
 
           ### 🗓️ 1일차: ${formData.destination} 도착 및 주요 명소 탐방
-          * **오전:** ${formData.destination} 공항 도착 후 시내로 이동 및 호텔 체크인. (추천 호텔: [도시 중심가에 위치한 가족/커플 친화적 호텔])
-          * **점심:** 현지 맛집에서 ${formData.destination} 전통 요리 즐기기. (예: [추천 레스토랑 이름])
-          * **오후:** 랜드마크 방문. (예: 에펠탑, 콜로세움, 만리장성 등) 아이들을 위한 포토 스팟 및 간단한 액티비티 고려.
-          * **저녁:** ${formData.destination} 야경이 보이는 레스토랑에서 근사한 저녁 식사.
-          * **숙소:** [선택한 호텔]
+          - **오전:** ${formData.destination} 공항 도착 후 시내로 이동 및 호텔 체크인. (추천 호텔: [도시 중심가에 위치한 가족/커플 친화적 호텔])
+          - **점심:** 현지 맛집에서 ${formData.destination} 전통 요리 즐기기. (예: [추천 레스토랑 이름])
+          - **오후:** 랜드마크 방문. (예: 에펠탑, 콜로세움, 만리장성 등) 아이들을 위한 포토 스팟 및 간단한 액티비티 고려.
+          - **저녁:** ${formData.destination} 야경이 보이는 레스토랑에서 근사한 저녁 식사.
+          - **숙소:** [선택한 호텔]
 
           ### 🗓️ 2일차: 문화/체험 및 휴식
-          * **오전:** 박물관 또는 미술관 방문 (예: 루브르 박물관, 대영 박물관). 아이들을 위한 오디오 가이드나 체험 프로그램 활용.
-          * **점심:** 캐주얼한 현지 카페에서 가볍게 식사.
-          * **오후:** 공원 또는 유원지에서 자유시간 및 휴식. (예: 센강 유람선, 디즈니랜드, 도쿄 타워 등). 가족 여행이라면 놀이공원, 커플 여행이라면 로맨틱한 산책 추천.
-          * **저녁:** 길거리 음식 탐방 또는 간단한 현지 식당 방문.
-          * **숙소:** [선택한 호텔]
+          - **오전:** 박물관 또는 미술관 방문 (예: 루브르 박물관, 대영 박물관). 아이들을 위한 오디오 가이드나 체험 프로그램 활용.
+          - **점심:** 캐주얼한 현지 카페에서 가볍게 식사.
+          - **오후:** 공원 또는 유원지에서 자유시간 및 휴식. (예: 센강 유람선, 디즈니랜드, 도쿄 타워 등). 가족 여행이라면 놀이공원, 커플 여행이라면 로맨틱한 산책 추천.
+          - **저녁:** 길거리 음식 탐방 또는 간단한 현지 식당 방문.
+          - **숙소:** [선택한 호텔]
 
           ### 🗓️ 3일차: 쇼핑 및 출국
-          * **오전:** 현지 시장 또는 유명 쇼핑가에서 기념품 구매 및 쇼핑.
-          * **점심:** 공항으로 이동 전 마지막 현지 식사.
-          * **오후:** ${formData.destination} 공항으로 이동 및 출국 수속. 아쉬운 마음을 뒤로하고 다음 여행을 기약합니다.
+          - **오전:** 현지 시장 또는 유명 쇼핑가에서 기념품 구매 및 쇼핑.
+          - **점심:** 공항으로 이동 전 마지막 현지 식사.
+          - **오후:** ${formData.destination} 공항으로 이동 및 출국 수속. 아쉬운 마음을 뒤로하고 다음 여행을 기약합니다.
 
           ---
 
           ### 💡 추가 팁:
-          * **교통:** ${formData.destination} 내에서는 대중교통(지하철, 버스) 이용이 편리하며, 필요시 택시나 공유 서비스를 이용하세요.
-          * **숙소:** ${formData.travelStyle}에 맞는 숙소(부티크 호텔, 아파트먼트, 리조트 등)를 미리 예약하는 것을 추천합니다.
-          * **예산 관리:** ${formData.budget} 내에서 효율적으로 지출 계획을 세우고, 환전 및 결제 수단을 미리 준비하세요.
-          * **안전:** 소지품 관리에 유의하고, 여행자 보험에 가입하는 것을 권장합니다.
-          * **현지 앱:** ${formData.destination}의 대중교통, 맛집, 지도 앱 등을 미리 다운로드해두면 편리합니다.
+          - **교통:** ${formData.destination} 내에서는 대중교통(지하철, 버스) 이용이 편리하며, 필요시 택시나 공유 서비스를 이용하세요.
+          - **숙소:** ${formData.travelStyle}에 맞는 숙소(부티크 호텔, 아파트먼트, 리조트 등)를 미리 예약하는 것을 추천합니다.
+          - **예산 관리:** ${formData.budget} 내에서 효율적으로 지출 계획을 세우고, 환전 및 결제 수단을 미리 준비하세요.
+          - **안전:** 소지품 관리에 유의하고, 여행자 보험에 가입하는 것을 권장합니다.
+          - **현지 앱:** ${formData.destination}의 대중교통, 맛집, 지도 앱 등을 미리 다운로드해두면 편리합니다.
 
           즐거운 ${formData.destination} 여행 되세요! 😊
         `;
         // --- 더미 데이터 끝 ---
 
-        // 마크다운 텍스트를 HTML로 변환 (간단한 처리)
-        let formattedPlan = generatedPlan
-          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // 볼드체
-          .replace(/##\s(.*?)\n/g, '<h2>$1</h2>') // H2
-          .replace(/###\s(.*?)\n/g, '<h3>$1</h3>') // H3
-          .replace(/####\s(.*?)\n/g, '<h4>$1</h4>') // H4
-          .replace(/\n\n/g, '<p>') // 단락
-          .replace(/\n\*\s/g, '<li>') // 리스트 아이템
-          .replace(/\n\d\.\s/g, '<li>'); // 숫자 리스트 아이템 (간단)
-
-        // 리스트 태그 닫기 (매우 간단한 처리, 완벽하지 않음)
-        formattedPlan = formattedPlan.replace(/<li>(.*?)(<br>|$)/g, '<li>$1</li>');
-        // 마지막 줄바꿈 제거 후 <p> 닫기
-        formattedPlan = formattedPlan.replace(/<p>$/, '');
-
-        travelPlanOutput.innerHTML = formattedPlan;
+        // 마크다운을 HTML로 변환하여 출력
+        travelPlanOutput.innerHTML = convertMarkdownToHtml(dummyPlan);
 
       } catch (error) {
         console.error('여행 계획 생성 중 오류 발생:', error);
-        travelPlanOutput.textContent = '오류: 여행 계획 생성 중 문제가 발생했습니다. 다시 시도해주세요.';
+        travelPlanOutput.innerHTML = '<p>오류: 여행 계획 생성 중 문제가 발생했습니다. 다시 시도해주세요.</p>';
         alert('여행 계획 생성 중 오류가 발생했습니다: ' + error.message);
       } finally {
         loadingIndicator.style.display = 'none';
